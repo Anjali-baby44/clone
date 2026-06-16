@@ -132,7 +132,6 @@ class Call(PyTgCalls):
             )
             await assistant_to_join.play(chat_id, stream)
 
-
     async def get_active_clients(self, chat_id):
         clients = []
         if chat_id in self.active_clients:
@@ -266,10 +265,17 @@ class Call(PyTgCalls):
                 assistant_to_join = PyTgCalls(userbot, cache_duration=100)
                 await assistant_to_join.start()
                 
-                @assistant_to_join.on_stream_end()
-                async def stream_end_handler(client, update: Update):
-                    await self.change_stream(client, update.chat_id)
-                    
+                # ==== V2 UPGRADE ====
+                @assistant_to_join.on_update()
+                async def stream_services_handler(client: PyTgCalls, update: Update):
+                    up_name = update.__class__.__name__
+                    if up_name in ["StreamAudioEnded", "StreamVideoEnded"]:
+                        await self.change_stream(client, update.chat_id)
+                    elif up_name in ["Kicked", "ClosedVoiceChat", "LeftGroupCall"]:
+                        try: await _clear_(update.chat_id)
+                        except: pass
+                # ====================
+                
                 self.custom_assistants[user_id] = assistant_to_join
         else:
             assistant_to_join = await group_assistant(self, chat_id)
@@ -508,7 +514,7 @@ class Call(PyTgCalls):
                 button = telegram_markup(_, chat_id)
                 run = await chat_client.send_photo(
                     chat_id=original_chat_id, photo=get_random_img(config.STREAM_IMG_URL),
-                    caption=_["stream_1"].format(f"https://t.me/{app.username}?start=info_{videoid}", title[:23], db[chat_id][0]["dur"], user),
+                    caption=_["stream_1"].format(f"https://t.me/app_username", title[:23], "Live", user),
                     reply_markup=InlineKeyboardMarkup(button)
                 )
                 db[chat_id][0]["mystic"] = run
@@ -537,8 +543,7 @@ class Call(PyTgCalls):
                 button = stream_markup(_, chat_id)
                 try: await mystic.delete()
                 except: pass
-                
-                run = await chat_client.send_photo(
+               run = await chat_client.send_photo(
                     chat_id=original_chat_id, photo=img,
                     caption=_["stream_1"].format(f"https://t.me/{app.username}?start=info_{videoid}", title[:23], db[chat_id][0]["dur"], user),
                     reply_markup=InlineKeyboardMarkup(button)
@@ -609,9 +614,15 @@ class Call(PyTgCalls):
         LOGGER(__name__).info("Starting PyTgCalls Client...\n")
         if config.STRING1: await self.one.start()
 
+    # ==== V2 UPGRADE: Replaced on_stream_end with on_update ====
     async def decorators(self):
-        @self.one.on_stream_end()
-        async def stream_end_handler1(client, update: Update):
-            await self.change_stream(client, update.chat_id)
+        @self.one.on_update()
+        async def stream_services_handler(client: PyTgCalls, update: Update):
+            up_name = update.__class__.__name__
+            if up_name in ["StreamAudioEnded", "StreamVideoEnded"]:
+                await self.change_stream(client, update.chat_id)
+            elif up_name in ["Kicked", "ClosedVoiceChat", "LeftGroupCall"]:
+                try: await _clear_(update.chat_id)
+                except: pass
 
 Lucky = Call()
