@@ -270,12 +270,6 @@ class Call(PyTgCalls):
                 async def stream_end_handler(client, update: Update):
                     await self.change_stream(client, update.chat_id)
                     
-                @assistant_to_join.on_kicked()
-                @assistant_to_join.on_closed_voice_chat()
-                @assistant_to_join.on_left()
-                async def stream_services_handler(_, chat_id: int):
-                    await self.stop_stream(chat_id)
-                    
                 self.custom_assistants[user_id] = assistant_to_join
         else:
             assistant_to_join = await group_assistant(self, chat_id)
@@ -616,12 +610,6 @@ class Call(PyTgCalls):
         if config.STRING1: await self.one.start()
 
     async def decorators(self):
-        @self.one.on_kicked()
-        @self.one.on_closed_voice_chat()
-        @self.one.on_left()
-        async def stream_services_handler(_, chat_id: int):
-            await self.stop_stream(chat_id)
-
         @self.one.on_stream_end()
         async def stream_end_handler1(client, update: Update):
             await self.change_stream(client, update.chat_id)
