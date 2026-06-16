@@ -8,11 +8,6 @@ from typing import Union
 from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
 from pytgcalls import PyTgCalls
-from pytgcalls.exceptions import (
-    AlreadyJoinedError,
-    NoActiveGroupCall,
-    TelegramServerError,
-)
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
 from pyrogram.enums import ParseMode
 
@@ -92,7 +87,6 @@ class Call(PyTgCalls):
         self.custom_assistants = {} 
         self.active_clients = {} 
 
-    # 🎵 HELPER: HIGH QUALITY AUDIO + AUTO VIDEO (720p Default -> 480p Fallback) FOR CHANGE_STREAM
     async def _safe_change_stream(self, client, chat_id, file_path, video=False, extra_args=""):
         if not video:
             stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH, ffmpeg_parameters=extra_args)
@@ -100,7 +94,6 @@ class Call(PyTgCalls):
             return
 
         try: 
-            # Default to 720p: Most stable for Telegram Voice Chats
             stream = MediaStream(
                 file_path, 
                 audio_parameters=AudioQuality.HIGH, 
@@ -110,7 +103,6 @@ class Call(PyTgCalls):
             await client.play(chat_id, stream)
         except Exception as e:
             LOGGER(__name__).warning(f"720p Change Stream failed, auto-switching to 480p: {e}")
-            # Instant fallback to 480p
             stream = MediaStream(
                 file_path, 
                 audio_parameters=AudioQuality.HIGH, 
@@ -119,14 +111,12 @@ class Call(PyTgCalls):
             )
             await client.play(chat_id, stream)
 
-    # 🎵 HELPER: HIGH QUALITY AUDIO + AUTO VIDEO (720p Default -> 480p Fallback) FOR JOIN_CALL
     async def _safe_join_call(self, assistant_to_join, chat_id, file_path, video=False):
         if not video:
             stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH)
             return await assistant_to_join.play(chat_id, stream)
 
         try: 
-            # Default to 720p
             stream = MediaStream(
                 file_path, 
                 audio_parameters=AudioQuality.HIGH, 
@@ -135,7 +125,6 @@ class Call(PyTgCalls):
             await assistant_to_join.play(chat_id, stream)
         except Exception as e:
             LOGGER(__name__).warning(f"720p Join Call failed, auto-switching to 480p: {e}")
-            # Instant fallback to 480p
             stream = MediaStream(
                 file_path, 
                 audio_parameters=AudioQuality.HIGH, 
@@ -301,9 +290,15 @@ class Call(PyTgCalls):
         
         try:
             await self._safe_join_call(assistant_to_join, chat_id, link, video)
-        except NoActiveGroupCall: raise AssistantErr(_["call_8"])
-        except AlreadyJoinedError: raise AssistantErr(_["call_9"])
-        except TelegramServerError: raise AssistantErr(_["call_10"])
+        except Exception as e:
+            err_str = str(e).lower()
+            if "not found" in err_str or "no active" in err_str:
+                raise AssistantErr(_["call_8"])
+            elif "already" in err_str:
+                raise AssistantErr(_["call_9"])
+            else:
+                LOGGER(__name__).error(f"Join Call Error: {e}")
+                raise AssistantErr(_["call_10"])
         
         await add_active_chat(chat_id)
         await music_on(chat_id)
@@ -609,7 +604,6 @@ class Call(PyTgCalls):
         pings = []
         if config.STRING1:
             try:
-                # Accessing ping attribute, compatible with PyTgCalls newer versions
                 ping_val = getattr(self.one, "ping", 0.0)
                 if callable(ping_val):
                     ping_val = await ping_val()
