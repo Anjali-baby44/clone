@@ -7,21 +7,13 @@ from typing import Union
 
 from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
-from pytgcalls import PyTgCalls, StreamType
+from pytgcalls import PyTgCalls
 from pytgcalls.exceptions import (
     AlreadyJoinedError,
     NoActiveGroupCall,
     TelegramServerError,
 )
-from pytgcalls.types import Update
-from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
-from pytgcalls.types.input_stream.quality import (
-    HighQualityAudio, 
-    HighQualityVideo, 
-    MediumQualityVideo, 
-    LowQualityVideo
-)
-from pytgcalls.types.stream import StreamAudioEnded
+from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
 from pyrogram.enums import ParseMode
 
 import config
@@ -103,53 +95,53 @@ class Call(PyTgCalls):
     # 🎵 HELPER: HIGH QUALITY AUDIO + AUTO VIDEO (720p Default -> 480p Fallback) FOR CHANGE_STREAM
     async def _safe_change_stream(self, client, chat_id, file_path, video=False, extra_args=""):
         if not video:
-            stream = AudioPiped(file_path, audio_parameters=HighQualityAudio(), additional_ffmpeg_parameters=extra_args)
-            await client.change_stream(chat_id, stream)
+            stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH, ffmpeg_parameters=extra_args)
+            await client.play(chat_id, stream)
             return
 
         try: 
             # Default to 720p: Most stable for Telegram Voice Chats
-            stream = AudioVideoPiped(
+            stream = MediaStream(
                 file_path, 
-                audio_parameters=HighQualityAudio(), 
-                video_parameters=MediumQualityVideo(), 
-                additional_ffmpeg_parameters=extra_args
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.HD_720p, 
+                ffmpeg_parameters=extra_args
             )
-            await client.change_stream(chat_id, stream)
+            await client.play(chat_id, stream)
         except Exception as e:
             LOGGER(__name__).warning(f"720p Change Stream failed, auto-switching to 480p: {e}")
             # Instant fallback to 480p
-            stream = AudioVideoPiped(
+            stream = MediaStream(
                 file_path, 
-                audio_parameters=HighQualityAudio(), 
-                video_parameters=LowQualityVideo(), 
-                additional_ffmpeg_parameters=extra_args
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.SD_480p, 
+                ffmpeg_parameters=extra_args
             )
-            await client.change_stream(chat_id, stream)
+            await client.play(chat_id, stream)
 
     # 🎵 HELPER: HIGH QUALITY AUDIO + AUTO VIDEO (720p Default -> 480p Fallback) FOR JOIN_CALL
     async def _safe_join_call(self, assistant_to_join, chat_id, file_path, video=False):
         if not video:
-            stream = AudioPiped(file_path, audio_parameters=HighQualityAudio())
-            return await assistant_to_join.join_group_call(chat_id, stream, stream_type=StreamType().pulse_stream)
+            stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH)
+            return await assistant_to_join.play(chat_id, stream)
 
         try: 
             # Default to 720p
-            stream = AudioVideoPiped(
+            stream = MediaStream(
                 file_path, 
-                audio_parameters=HighQualityAudio(), 
-                video_parameters=MediumQualityVideo()
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.HD_720p
             )
-            await assistant_to_join.join_group_call(chat_id, stream, stream_type=StreamType().pulse_stream)
+            await assistant_to_join.play(chat_id, stream)
         except Exception as e:
             LOGGER(__name__).warning(f"720p Join Call failed, auto-switching to 480p: {e}")
             # Instant fallback to 480p
-            stream = AudioVideoPiped(
+            stream = MediaStream(
                 file_path, 
-                audio_parameters=HighQualityAudio(), 
-                video_parameters=LowQualityVideo()
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.SD_480p
             )
-            await assistant_to_join.join_group_call(chat_id, stream, stream_type=StreamType().pulse_stream)
+            await assistant_to_join.play(chat_id, stream)
 
 
     async def get_active_clients(self, chat_id):
@@ -185,14 +177,14 @@ class Call(PyTgCalls):
         try: await _clear_(chat_id)
         except: pass
         for assistant in assistants:
-            try: await assistant.leave_group_call(chat_id)
+            try: await assistant.leave_call(chat_id)
             except: pass
         if chat_id in self.active_clients: del self.active_clients[chat_id]
 
     async def stop_stream_force(self, chat_id: int):
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
-            try: await assistant.leave_group_call(chat_id)
+            try: await assistant.leave_call(chat_id)
             except: pass
         if chat_id in self.active_clients: del self.active_clients[chat_id]
         try: await _clear_(chat_id)
@@ -267,7 +259,7 @@ class Call(PyTgCalls):
         assistant = await group_assistant(self, config.LOGGER_ID)
         await self._safe_join_call(assistant, config.LOGGER_ID, link, video=True)
         await asyncio.sleep(0.2)
-        await assistant.leave_group_call(config.LOGGER_ID)
+        await assistant.leave_call(config.LOGGER_ID)
 
     async def join_call(self, chat_id: int, original_chat_id: int, link, video: Union[bool, str] = None, image: Union[bool, str] = None, userbot=None):
         assistant_to_join = None
@@ -284,15 +276,17 @@ class Call(PyTgCalls):
             else:
                 assistant_to_join = PyTgCalls(userbot, cache_duration=100)
                 await assistant_to_join.start()
+                
                 @assistant_to_join.on_stream_end()
                 async def stream_end_handler(client, update: Update):
-                    if not isinstance(update, StreamAudioEnded): return
                     await self.change_stream(client, update.chat_id)
+                    
                 @assistant_to_join.on_kicked()
                 @assistant_to_join.on_closed_voice_chat()
                 @assistant_to_join.on_left()
                 async def stream_services_handler(_, chat_id: int):
                     await self.stop_stream(chat_id)
+                    
                 self.custom_assistants[user_id] = assistant_to_join
         else:
             assistant_to_join = await group_assistant(self, chat_id)
@@ -479,7 +473,7 @@ class Call(PyTgCalls):
             if not db.get(chat_id): 
                 await _clear_(chat_id)
                 if chat_id in self.active_clients: del self.active_clients[chat_id]
-                try: await client.leave_group_call(chat_id)
+                try: await client.leave_call(chat_id)
                 except: pass
                 return
 
@@ -487,7 +481,7 @@ class Call(PyTgCalls):
             LOGGER(__name__).error(f"Error in change_stream core: {e}")
             await _clear_(chat_id)
             if chat_id in self.active_clients: del self.active_clients[chat_id]
-            try: await client.leave_group_call(chat_id)
+            try: await client.leave_call(chat_id)
             except: pass
             return
 
@@ -613,7 +607,14 @@ class Call(PyTgCalls):
 
     async def ping(self):
         pings = []
-        if config.STRING1: pings.append(await self.one.ping)
+        if config.STRING1:
+            try:
+                # Accessing ping attribute, compatible with PyTgCalls newer versions
+                ping_val = getattr(self.one, "ping", 0.0)
+                if callable(ping_val):
+                    ping_val = await ping_val()
+                pings.append(ping_val)
+            except: pass
         return str(round(sum(pings) / len(pings), 3)) if pings else "0.0"
 
     async def start(self):
@@ -629,7 +630,6 @@ class Call(PyTgCalls):
 
         @self.one.on_stream_end()
         async def stream_end_handler1(client, update: Update):
-            if not isinstance(update, StreamAudioEnded): return
             await self.change_stream(client, update.chat_id)
 
 Lucky = Call()
