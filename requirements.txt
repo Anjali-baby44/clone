@@ -1,5 +1,5 @@
 asyncio
-pyrofork
+kurigram
 gTTS
 aiofiles
 aiohttp
@@ -26,7 +26,6 @@ SafoneAPI
 speedtest-cli
 spotipy
 tgcrypto>=1.2.5
-pyrogram>=2.0.106
 telegraph
 unidecode
 youtube-search
