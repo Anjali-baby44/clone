@@ -347,30 +347,48 @@ class Call(PyTgCalls):
                     last_vidid = str(popped.get("vidid") or "")
 
                     try:
-                        lang_pools = {
-                            "Hindi": ["hindi single track official video", "bollywood latest lyrical song"],
-                            "Punjabi": ["latest punjabi single official video", "punjabi trending track lyrical"],
-                            "Bhojpuri": ["bhojpuri latest single video song", "bhojpuri trending song official"],
-                            "Haryanvi": ["haryanvi single track official", "latest haryanvi video song"],
-                            "Tamil": ["tamil latest single official video", "kollywood trending song lyrical"],
-                            "Telugu": ["telugu tollywood latest single song", "telugu lyrical video official"],
-                            "English": ["english pop single official music video", "trending english lyrical song"]
-                        }
                         keywords_map = {
-                            "Punjabi": ["punjabi", "jass", "sidhu", "karan", "diljit", "amrit", "ap dhillon"],
-                            "Bhojpuri": ["bhojpuri", "khesari", "pawan", "shilpi", "antra"],
-                            "Haryanvi": ["haryanvi", "sapna", "renuka", "gulzaar"],
-                            "Tamil": ["tamil", "anirudh", "rahman", "kollywood"],
-                            "Telugu": ["telugu", "allu", "ramarao", "tollywood", "dsp"],
-                            "English": ["english", "pop song", "taylor swift", "justin bieber"]
+                            "Punjabi": ["sidhu moose wala", "karan aujla", "diljit dosanjh", "ap dhillon", "amrit maan", "shubh", "kaka", "hardy sandhu", "guru randhawa", "b praak", "jass manak", "harrdy sandhu", "parmish verma", "punjabi"],
+                            "Bhojpuri": ["pawan singh", "khesari lal yadav", "shilpi raj", "antra singh", "pramod premi", "ritesh pandey", "arvind akela kallu", "gunjan singh", "samar singh", "neha raj", "bhojpuri"],
+                            "Haryanvi": ["sapna choudhary", "renuka panwar", "gulzaar chhaniwala", "sumit goswami", "raju punjabi", "amit saini rohtakiya", "pranjal dahiya", "md kd", "haryanvi"],
+                            "Hindi": ["arijit singh", "neha kakkar", "shreya ghoshal", "jubin nautiyal", "atif aslam", "darshan raval", "armaan malik", "sonu nigam", "yo yo honey singh", "badshah", "sunidhi chauhan", "udit narayan", "kumar sanu", "alka yagnik", "sachet tandon", "parampara", "hindi"],
+                            "Tamil": ["anirudh", "ar rahman", "rahman", "yuvan shankar raja", "sid sriram", "harris jayaraj", "vijay prakash", "s.p. balasubrahmanyam", "tamil", "kollywood"],
+                            "Telugu": ["devi sri prasad", "dsp", "thaman", "sid sriram", "anurag kulkarni", "mangli", "geetha madhuri", "allu", "ramarao", "telugu", "tollywood"],
+                            "English": ["taylor swift", "justin bieber", "ed sheeran", "ariana grande", "the weeknd", "drake", "eminem", "billie eilish", "dua lipa", "bruno mars", "post malone", "english", "pop song"]
                         }
+
                         detected_lang = "Hindi"
+                        detected_artist = None
+
                         for lang, kws in keywords_map.items():
-                            if any(kw in title_lower for kw in kws):
-                                detected_lang = lang
+                            for kw in kws:
+                                if kw in title_lower:
+                                    detected_lang = lang
+                                    if kw not in ["hindi", "punjabi", "bhojpuri", "haryanvi", "tamil", "telugu", "english", "kollywood", "tollywood", "pop song"]:
+                                        detected_artist = kw
+                                    break
+                            if detected_artist or detected_lang != "Hindi":
                                 break
 
-                        search_query = random.choice(lang_pools[detected_lang])
+                        if detected_artist:
+                            search_query = random.choice([
+                                f"{detected_artist} latest hit single official video",
+                                f"{detected_artist} trending track lyrical",
+                                f"{detected_artist} superhit popular track audio",
+                                f"{detected_artist} best song official"
+                            ])
+                        else:
+                            lang_pools = {
+                                "Hindi": ["hindi single track official video", "bollywood latest lyrical hit song", "trending hindi pop music"],
+                                "Punjabi": ["latest punjabi single official video", "punjabi trending track lyrical", "punjabi pop hit track"],
+                                "Bhojpuri": ["bhojpuri latest single video song", "bhojpuri trending song official", "bhojpuri hit dj remix"],
+                                "Haryanvi": ["haryanvi single track official", "latest haryanvi video song", "haryanvi dj hit pop"],
+                                "Tamil": ["tamil latest single official video", "kollywood trending song lyrical", "tamil hit movie track"],
+                                "Telugu": ["telugu tollywood latest single song", "telugu lyrical video official", "telugu trending track"],
+                                "English": ["english pop single official music video", "trending english lyrical song", "global hit english track"]
+                            }
+                            search_query = random.choice(lang_pools[detected_lang])
+
                         valid_choices = []
 
                         try:
